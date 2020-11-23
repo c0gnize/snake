@@ -1,27 +1,6 @@
 import * as React from 'react';
 import style from './index.css';
 
-const enum Direction {
-  left,
-  up,
-  right,
-  down
-}
-
-const DIR_KEYS: { [key: number]: Direction } = {
-  37: Direction.left,
-  38: Direction.up,
-  39: Direction.right,
-  40: Direction.down
-};
-
-const REVERSE_DIR_KEYS: { [key: number]: Direction } = {
-  [Direction.left]: Direction.right,
-  [Direction.up]: Direction.down,
-  [Direction.right]: Direction.left,
-  [Direction.down]: Direction.up
-};
-
 export const GameBoard: React.FC<{ cfg: Config }> = ({ cfg }) => {
   const [state, dispatch] = React.useReducer(reducer, cfg, () => getIninitalState(cfg));
 
@@ -30,6 +9,7 @@ export const GameBoard: React.FC<{ cfg: Config }> = ({ cfg }) => {
     return () => clearTimeout(handle);
   }, [state.snake[0].x, state.snake[0].y]);
 
+  // TODO: use swipes on touch device
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const dir = DIR_KEYS[e.keyCode];
@@ -86,9 +66,33 @@ export const GameBoard: React.FC<{ cfg: Config }> = ({ cfg }) => {
             <div className={style.msg}>Game over</div>
           )}
         </div>
+        <span className={style.tip}>
+          Tip: use the arrow keys to change the direction of the snake
+        </span>
       </div>
     </div>
   );
+};
+
+const enum Direction {
+  left,
+  up,
+  right,
+  down
+}
+
+const DIR_KEYS: { [key: number]: Direction } = {
+  37: Direction.left,
+  38: Direction.up,
+  39: Direction.right,
+  40: Direction.down
+};
+
+const REVERSE_DIR_KEYS: { [key: number]: Direction } = {
+  [Direction.left]: Direction.right,
+  [Direction.up]: Direction.down,
+  [Direction.right]: Direction.left,
+  [Direction.down]: Direction.up
 };
 
 function reducer(prevState: State, action: Action) {
@@ -157,6 +161,26 @@ function getIninitalState(cfg: Config): State {
   };
 }
 
+
+function getNextState(state: State, nextPos: Position, nextDir: Direction, cfg: Config): State {
+  const nextState: State = { ...state, direction: nextDir };
+  nextState.snake.unshift(nextPos);
+  const eat = isSamePos(nextPos, nextState.food.pos);
+  if (eat) {
+    const type = nextState.food.type;
+    if (type === FoodType.apple) {
+      nextState.speed = Math.max(500, nextState.speed + cfg.speedStep);
+    } else if (type === FoodType.fruit) {
+      nextState.snake.push({ x: -1, y: -1 });
+    }
+  }
+  nextState.snake.pop();
+  if (eat) {
+    nextState.food = placeFood(nextState.snake, cfg);
+  }
+  return nextState;
+}
+
 function getNextPos(pos: Position, dir: Direction): Position {
   if (dir === Direction.right) {
     return { x: pos.x + 1, y: pos.y };
@@ -195,36 +219,21 @@ function isSamePos(a: Position, b: Position): boolean {
 }
 
 function placeFood(snake: Snake, cfg: Config): Food {
-  const pos = { x: 0, y: 0 };
-  // TODO: use another algorithm
+  const indexes = Array<number>();
   for (let i = 0; i < cfg.xx * cfg.yy; i++) {
-    pos.x = Math.floor(Math.random() * cfg.xx);
-    pos.y = Math.floor(Math.random() * cfg.xx);
-    if (!isInSnake(pos, snake)) {
-      break;
+    if (!isInSnake(getPosByIndex(i), snake)) {
+      indexes.push(i);
     }
   }
   return {
     type: Math.random() < cfg.appleRatio ? FoodType.apple : FoodType.fruit,
-    pos
+    pos: getPosByIndex(indexes[Math.floor(Math.random() * indexes.length)])
   };
 }
 
-function getNextState(state: State, nextPos: Position, nextDir: Direction, cfg: Config): State {
-  const nextState: State = { ...state, direction: nextDir };
-  nextState.snake.unshift(nextPos);
-  const eat = isSamePos(nextPos, nextState.food.pos);
-  if (eat) {
-    const type = nextState.food.type;
-    if (type === FoodType.apple) {
-      nextState.speed = Math.max(500, nextState.speed + cfg.speedStep);
-    } else if (type === FoodType.fruit) {
-      nextState.snake.push({ x: -1, y: -1 });
-    }
-  }
-  nextState.snake.pop();
-  if (eat) {
-    nextState.food = placeFood(nextState.snake, cfg);
-  }
-  return nextState;
+function getPosByIndex(index: number): Position {
+  return {
+    x: Math.floor(index % 20),
+    y: Math.floor(index / 20)
+  };
 }

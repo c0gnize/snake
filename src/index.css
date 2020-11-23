@@ -57,3 +57,9 @@ body {
   text-transform: uppercase;
   z-index: 1;
 }
+
+.tip {
+  font-size: small;
+  font-style: italic;
+  color: hsl(0, 0%, 40%)
+}
