@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "description": "snake game",
   "scripts": {
-    "prebulish": "npm run dist",
+    "prebulish": "npm run build",
     "clean-dist": "rimraf dist/*",
-    "dev": "webpack-dev-server --config=webpack.dev.js",
-    "dist": "yarn run clean-dist && webpack -p --config=webpack.dist.js"
+    "start": "webpack-dev-server --config=webpack.dev.js",
+    "build": "yarn run clean-dist && webpack -p --config=webpack.dist.js"
   },
   "keywords": [
     "snake",
+    "game",
     "react",
     "typescript"
   ],

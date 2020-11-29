@@ -1,239 +1,109 @@
 import * as React from 'react';
+import { cn } from './class-names';
+import { Config, Direction, FoodData, FoodType, SnakeData, } from './types';
+import { useGameState } from './state';
+import { Swipe } from './swipe';
 import style from './index.css';
 
-export const GameBoard: React.FC<{ cfg: Config }> = ({ cfg }) => {
-  const [state, dispatch] = React.useReducer(reducer, cfg, () => getIninitalState(cfg));
+export const Board: React.FC<{ cfg: Config }> = ({ cfg }) => {
+  const [state, dispatch] = useGameState(cfg);
 
   React.useEffect(() => {
-    const handle = setTimeout(() => dispatch({ type: 'move' }), state.speed);
-    return () => clearTimeout(handle);
+    const id = setTimeout(() => dispatch({ type: 'move' }), state.delay);
+    return () => clearTimeout(id);
   }, [state.snake[0].x, state.snake[0].y]);
 
-  // TODO: use swipes on touch device
+  const moveTo = React.useCallback((dir: Direction) => {
+    if (REVERSE_DIR[dir] !== state.dir) {
+      dispatch({ type: 'moveImmediate', dir });
+    }
+  }, []);
+
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const dir = DIR_KEYS[e.keyCode];
-      if (dir !== undefined && REVERSE_DIR_KEYS[dir] !== state.direction) {
-        dispatch({ type: 'moveImmediate', direction: dir });
+      const dir = KEY_DIR[e.keyCode];
+      if (dir !== undefined) {
+        moveTo(dir);
       }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  });
+  }, []);
+
+  React.useEffect(() => {
+    const swiper = new Swipe(moveTo);
+    swiper.connect(window);
+    return () => swiper.disconnect(window);
+  }, []);
+
+  const width = cfg.cols * cfg.cellSize;
+  const height = cfg.rows * cfg.cellSize;
 
   return (
     <div className={cn(style.app, style.flexcol, style.flexcenter)}>
-      <div className={style.flexcol} style={{ width: cfg.xx * cfg.size }}>
+      <div className={style.flexcol} style={{ width }}>
         <div className={style.info}>
-          <div>Score: {state.snake.length - 2}</div>
-          <div>Speed: {state.speed / 1000}</div>
+          <div>Score: {state.getScore()}</div>
+          <div>Speed: {state.getSpeed()}</div>
         </div>
         <div
           className={cn(style.board, style.flexcol, style.flexcenter)}
-          style={{
-            width: cfg.xx * cfg.size,
-            height: cfg.yy * cfg.size,
-            backgroundSize: `${cfg.size}px ${cfg.size}px`,
-          }}
+          style={{ width, height, backgroundSize: `${cfg.cellSize}px ${cfg.cellSize}px` }}
         >
-          {state.snake.map((d, i) => (
-            <div
-              key={i}
-              className={cn(style.abs, style.snake)}
-              style={{
-                left: d.x * cfg.size,
-                top: d.y * cfg.size,
-                width: cfg.size,
-                height: cfg.size
-              }}
-            />
-          ))}
-          <div
-            className={style.abs}
-            style={{
-              left: state.food.pos.x * cfg.size,
-              top: state.food.pos.y * cfg.size,
-              width: cfg.size,
-              height: cfg.size
-            }}
-          >
-            {state.food.type === FoodType.apple ? '\uD83C\uDF4E' : '\uD83C\uDF4C'}
-          </div>
-          {(state.win && !state.gameOver) && (
-            <div className={style.msg}>Win</div>
-          )}
-          {state.gameOver && (
-            <div className={style.msg}>Game over</div>
-          )}
+          <Snake data={state.snake} size={cfg.cellSize} />
+          <Food data={state.food} size={cfg.cellSize} />
+          {state.win && <div className={style.msg}>Win</div>}
+          {state.defeat && <div className={style.msg}>Game over</div>}
         </div>
         <span className={style.tip}>
-          Tip: use the arrow keys to change the direction of the snake
+          Use the arrow keys to change the direction of the snake
         </span>
       </div>
     </div>
   );
 };
 
-const enum Direction {
-  left,
-  up,
-  right,
-  down
-}
+const Snake: React.FC<{ data: SnakeData, size: number }> = ({ data, size }) => (
+  <>
+    {data.map((p, i) => (
+      <div
+        key={i}
+        className={cn(style.abs, style.snake, !i && style.snakeHead)}
+        style={{
+          left: p.x * size - 1,
+          top: p.y * size - 1,
+          width: size + 2,
+          height: size + 2
+        }}
+      />
+    ))}
+  </>
+);
 
-const DIR_KEYS: { [key: number]: Direction } = {
+const Food: React.FC<{ data: FoodData, size: number }> = ({ data, size }) => (
+  <div
+    className={style.abs}
+    style={{
+      left: data.pos.x * size,
+      top: data.pos.y * size,
+      width: size,
+      height: size
+    }}
+  >
+    {data.type === FoodType.apple ? '\uD83C\uDF4E' : '\uD83C\uDF4C'}
+  </div>
+);
+
+const KEY_DIR: { [key: number]: Direction } = {
   37: Direction.left,
   38: Direction.up,
   39: Direction.right,
   40: Direction.down
 };
 
-const REVERSE_DIR_KEYS: { [key: number]: Direction } = {
+const REVERSE_DIR: { [direction: number]: Direction } = {
   [Direction.left]: Direction.right,
   [Direction.up]: Direction.down,
   [Direction.right]: Direction.left,
   [Direction.down]: Direction.up
 };
-
-function reducer(prevState: State, action: Action) {
-  const nextDir = action.type === 'move' ? prevState.direction : action.direction;
-  const nextPos = getNextPos(prevState.snake[0], nextDir);
-  if (isWin(nextPos, prevState.snake, prevState.config)) {
-    return { ...prevState, win: true };
-  } else if (isGameOver(nextPos, prevState.snake, prevState.config)) {
-    return { ...prevState, gameOver: true };
-  }
-  return getNextState(prevState, nextPos, nextDir, prevState.config);
-};
-
-function cn(...classNames: (string | boolean)[]) {
-  return classNames.filter(c => typeof c === 'string').join(' ');
-}
-
-export type Config = {
-  yy: number;
-  xx: number;
-  size: number;
-  speed: number;
-  speedStep: number;
-  appleRatio: number;
-}
-
-const enum FoodType {
-  apple,
-  fruit
-}
-
-type Position = {
-  x: number;
-  y: number;
-};
-
-type Snake = Position[];
-
-type Food = {
-  pos: Position;
-  type: FoodType;
-}
-
-type State = {
-  snake: Snake;
-  food: Food;
-  speed: number;
-  direction: Direction;
-  win: boolean;
-  gameOver: boolean;
-  config: Config;
-}
-
-type Action = { type: 'move' } | { type: 'moveImmediate', direction: Direction };
-
-function getIninitalState(cfg: Config): State {
-  const snake: Snake = [{ x: 1, y: 0 }, { x: 0, y: 0 }];
-  return {
-    snake,
-    food: placeFood(snake, cfg),
-    direction: Direction.right,
-    speed: cfg.speed,
-    win: false,
-    gameOver: false,
-    config: cfg
-  };
-}
-
-
-function getNextState(state: State, nextPos: Position, nextDir: Direction, cfg: Config): State {
-  const nextState: State = { ...state, direction: nextDir };
-  nextState.snake.unshift(nextPos);
-  const eat = isSamePos(nextPos, nextState.food.pos);
-  if (eat) {
-    const type = nextState.food.type;
-    if (type === FoodType.apple) {
-      nextState.speed = Math.max(500, nextState.speed + cfg.speedStep);
-    } else if (type === FoodType.fruit) {
-      nextState.snake.push({ x: -1, y: -1 });
-    }
-  }
-  nextState.snake.pop();
-  if (eat) {
-    nextState.food = placeFood(nextState.snake, cfg);
-  }
-  return nextState;
-}
-
-function getNextPos(pos: Position, dir: Direction): Position {
-  if (dir === Direction.right) {
-    return { x: pos.x + 1, y: pos.y };
-  } else if (dir === Direction.down) {
-    return { x: pos.x, y: pos.y + 1 };
-  } else if (dir === Direction.left) {
-    return { x: pos.x - 1, y: pos.y };
-  } else {
-    return { x: pos.x, y: pos.y - 1 };
-  }
-}
-
-function isWin(nextPos: Position, snake: Snake, cfg: Config): boolean {
-  return (
-    snake.length === cfg.xx * cfg.yy - 1 &&
-    !isInSnake(nextPos, snake)
-  );
-}
-
-function isGameOver(nextPos: Position, snake: Snake, cfg: Config): boolean {
-  return (
-    nextPos.x < 0 ||
-    nextPos.y < 0 ||
-    nextPos.x >= cfg.xx ||
-    nextPos.y >= cfg.yy ||
-    isInSnake(nextPos, snake)
-  );
-}
-
-function isInSnake(pos: Position, snake: Snake): boolean {
-  return snake.some(d => isSamePos(d, pos));
-}
-
-function isSamePos(a: Position, b: Position): boolean {
-  return a.x === b.x && a.y === b.y;
-}
-
-function placeFood(snake: Snake, cfg: Config): Food {
-  const indexes = Array<number>();
-  for (let i = 0; i < cfg.xx * cfg.yy; i++) {
-    if (!isInSnake(getPosByIndex(i), snake)) {
-      indexes.push(i);
-    }
-  }
-  return {
-    type: Math.random() < cfg.appleRatio ? FoodType.apple : FoodType.fruit,
-    pos: getPosByIndex(indexes[Math.floor(Math.random() * indexes.length)])
-  };
-}
-
-function getPosByIndex(index: number): Position {
-  return {
-    x: Math.floor(index % 20),
-    y: Math.floor(index / 20)
-  };
-}

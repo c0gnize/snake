@@ -46,16 +46,23 @@ body {
 
 .snake {
   background-color: gray;
-  border-radius: 3px;
+  border-radius: 50%;
   transition-property: top left;
   transition-duration: 200ms;
+}
+
+.snake__head {
+  box-sizing: border-box;
+  background-color: gold;
+  border: gray solid 3px;
+  z-index: 1;
 }
 
 .msg {
   font-size: xx-large;
   color: red;
   text-transform: uppercase;
-  z-index: 1;
+  z-index: 2;
 }
 
 .tip {
